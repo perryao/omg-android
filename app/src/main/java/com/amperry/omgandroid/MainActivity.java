@@ -87,7 +87,7 @@ public class MainActivity extends ActionBarActivity implements View.OnClickListe
                     Toast.makeText(getApplicationContext(), "Welcome, " + inputName + "!", Toast.LENGTH_LONG).show();
                 }
             });
-            
+
             alert.setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
 
                 public void onClick(DialogInterface dialog, int whichButton) {}
@@ -117,8 +117,12 @@ public class MainActivity extends ActionBarActivity implements View.OnClickListe
     public void onClick(View v) {
         String currentText = mainEditText.getText().toString();
         mainTextView.setText(currentText + " is learning Android Development");
-        mNameList.add(0, currentText);
-        mArrayAdapter.notifyDataSetChanged();
+        if (!mNameList.contains(currentText)) {
+            mNameList.add(0, currentText);
+            mArrayAdapter.notifyDataSetChanged();
+        } else {
+            Toast.makeText(getApplicationContext(), "That name has already been used!", Toast.LENGTH_LONG).show();
+        }
         setShareIntent();
     }
 
