@@ -1,12 +1,14 @@
 package com.amperry.omgandroid;
 
 import android.app.AlertDialog;
+import android.app.ProgressDialog;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.os.Bundle;
 import android.support.v4.view.MenuItemCompat;
 import android.support.v7.app.ActionBarActivity;
-import android.os.Bundle;
+import android.support.v7.widget.ShareActionProvider;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -16,13 +18,17 @@ import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ListView;
-import android.support.v7.widget.ShareActionProvider;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import java.util.ArrayList;
-import java.util.List;
+import com.loopj.android.http.AsyncHttpClient;
+import com.loopj.android.http.JsonHttpResponseHandler;
 
+import org.json.JSONObject;
+
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
+import java.util.ArrayList;
 
 public class MainActivity extends ActionBarActivity implements View.OnClickListener, AdapterView.OnItemClickListener {
 
@@ -30,13 +36,16 @@ public class MainActivity extends ActionBarActivity implements View.OnClickListe
     Button mainButton;
     EditText mainEditText;
     ListView mainListView;
-    ArrayAdapter mArrayAdapter;
+    ProgressDialog mDialog;
+    JSONAdapter mJSONAdapter;
     ArrayList mNameList = new ArrayList();
     ShareActionProvider mShareActionProvider;
 
     private static final String PREFS = "prefs";
     private static final String PREF_NAME = "name";
     SharedPreferences mSharedPreferences;
+
+    private static final String QUERY_URL = "http://openlibrary.org/search.json?q=";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -52,12 +61,18 @@ public class MainActivity extends ActionBarActivity implements View.OnClickListe
 
         mainListView = (ListView)findViewById(R.id.main_listview);
 
-        mArrayAdapter = new ArrayAdapter(this, android.R.layout.simple_list_item_1, mNameList);
 
-        mainListView.setAdapter(mArrayAdapter);
         mainListView.setOnItemClickListener(this);
 
+        mJSONAdapter = new JSONAdapter(this, getLayoutInflater());
+
+        mainListView.setAdapter(mJSONAdapter);
+
         displayWelcome();
+
+        mDialog = new ProgressDialog(this);
+        mDialog.setMessage("Searching for book");
+        mDialog.setCancelable(false);
     }
 
     public void displayWelcome() {
@@ -114,20 +129,19 @@ public class MainActivity extends ActionBarActivity implements View.OnClickListe
 
     @Override
     public void onClick(View v) {
-        String currentText = mainEditText.getText().toString();
-        mainTextView.setText(currentText + " is learning Android Development");
-        if (!mNameList.contains(currentText)) {
-            mNameList.add(0, currentText);
-            mArrayAdapter.notifyDataSetChanged();
-        } else {
-            Toast.makeText(getApplicationContext(), "That name has already been used!", Toast.LENGTH_LONG).show();
-        }
-        setShareIntent();
+        queryBooks(mainEditText.getText().toString());
     }
 
     @Override
     public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
-        Log.d("omg android", position + ": " + mNameList.get(position));
+        JSONObject jsonObject = (JSONObject) mJSONAdapter.getItem(position);
+        String coverID = jsonObject.optString("cover_i", "");
+
+        Intent detailIntent = new Intent(this, DetailActivity.class);
+
+        detailIntent.putExtra("coverID", coverID);
+        startActivity(detailIntent);
+
     }
 
     private void setShareIntent() {
@@ -139,5 +153,50 @@ public class MainActivity extends ActionBarActivity implements View.OnClickListe
 
             mShareActionProvider.setShareIntent(shareIntent);
         }
+    }
+
+    private void queryBooks(String searchString) {
+
+        // Prepare your search string to be put in a URL
+        // It might have reserved characters or something
+        String urlString = "";
+        try {
+            urlString = URLEncoder.encode(searchString, "UTF-8");
+        } catch (UnsupportedEncodingException e) {
+
+            // if this fails for some reason, let the user know why
+            e.printStackTrace();
+            Toast.makeText(this, "Error: " + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
+
+        // Create a client to perform networking
+        AsyncHttpClient client = new AsyncHttpClient();
+
+        // Have the client get a JSONArray of data
+        // and define how to respond
+        client.get(QUERY_URL + urlString,
+                new JsonHttpResponseHandler() {
+
+                    public void onSuccess(JSONObject jsonObject) {
+                        // Display a "Toast" message
+                        // to announce your success
+                        Toast.makeText(getApplicationContext(), "Success!", Toast.LENGTH_LONG).show();
+
+                        mJSONAdapter.updateData(jsonObject.optJSONArray("docs"));
+                        mDialog.hide();
+                    }
+
+                    public void onFailure(int statusCode, Throwable throwable, JSONObject error) {
+                        // Display a "Toast" message
+                        // to announce the failure
+                        Toast.makeText(getApplicationContext(), "Error: " + statusCode + " " + throwable.getMessage(), Toast.LENGTH_LONG).show();
+
+                        // Log error message
+                        // to help solve any problems
+                        Log.e("omg android", statusCode + " " + throwable.getMessage());
+                        mDialog.hide();
+                    }
+                });
+        mDialog.show();
     }
 }
